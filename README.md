@@ -35,3 +35,22 @@ Si Supabase n’est pas configuré, l’interface doit signaler que les fonction
 6. Quotas, paiements et administration après sécurisation du cœur pédagogique.
 
 Fuseau horaire produit : `Africa/Abidjan`. Devise : FCFA/XOF.
+
+## Fonctionnalités déjà codées dans le dépôt
+
+- Page d’accueil responsive et sections de présentation.
+- Formulaires d’inscription, de connexion et de réinitialisation du mot de passe via Supabase Auth.
+- Formulaire d’inscription avec nom, pays, filière, niveau et établissement facultatif.
+- Sélection locale et validation de fichiers PDF (type et limite de 20 Mo).
+- Flux d’envoi d’un PDF vers le bucket privé `course-pdfs` et enregistrement dans `courses`, une fois Supabase configuré.
+- Migration SQL initiale dans `supabase/migrations/`, incluant les tables et les règles RLS.
+
+## Étapes obligatoires pour lancer les fonctions connectées
+
+1. Créer un projet Supabase.
+2. Appliquer `supabase/migrations/202610110001_initial_schema.sql` dans l’éditeur SQL Supabase.
+3. Copier `.env.example` vers `.env.local` et remplir `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY`.
+4. Configurer les URL de redirection d’authentification dans Supabase.
+5. Lancer `npm install`, puis `npm run dev`.
+
+L’extraction PDF, l’OCR, la génération IA, les QCM corrigés et le suivi de progression restent à implémenter. Ils ne doivent pas être présentés comme fonctionnels avant leur réalisation et leurs tests.
