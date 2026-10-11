@@ -1,5 +1,7 @@
-import { useRef, useState } from 'react';
-import { BookOpen, Brain, CheckCircle2, ChevronRight, CircleHelp, Clock3, FileText, GraduationCap, LayoutDashboard, LockKeyhole, Menu, Plus, ShieldCheck, Sparkles, Target, UploadCloud, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import AuthModal from './AuthModal';
+import { isSupabaseConfigured, supabase } from './lib/supabase';
+import { BookOpen, Brain, CheckCircle2, ChevronRight, CircleHelp, Clock3, FileText, GraduationCap, LockKeyhole, Menu, Plus, ShieldCheck, Sparkles, Target, UploadCloud, X } from 'lucide-react';
 
 type CourseFile = { name: string; size: number; status: 'local' };
 
@@ -15,9 +17,28 @@ function formatSize(bytes: number) {
 
 export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [signedInName, setSignedInName] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<CourseFile | null>(null);
   const [notice, setNotice] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) setSignedInName(data.session.user.user_metadata?.full_name || data.session.user.email || 'Étudiant');
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSignedInName(session?.user.user_metadata?.full_name || session?.user.email || null);
+    });
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  async function signOut() {
+    if (supabase) await supabase.auth.signOut();
+    setSignedInName(null);
+    setNotice('Tu es déconnecté.');
+  }
 
   function handleFile(file?: File) {
     setNotice('');
@@ -48,8 +69,7 @@ export default function App() {
           <a href="#fonctionnalites" onClick={() => setMenuOpen(false)}>Fonctionnalités</a>
           <a href="#comment-ca-marche" onClick={() => setMenuOpen(false)}>Comment ça marche</a>
           <a href="#securite" onClick={() => setMenuOpen(false)}>Sécurité</a>
-          <button className="button button-outline" onClick={() => setNotice('L’authentification sera activée après configuration de Supabase.')}>Connexion</button>
-          <button className="button button-primary" onClick={() => document.getElementById('importer')?.scrollIntoView({ behavior: 'smooth' })}>Commencer gratuitement <ChevronRight size={17} /></button>
+          {signedInName ? <><span className="nav-greeting">Bonjour, {signedInName.split(' ')[0]}</span><button className="button button-outline" onClick={signOut}>Déconnexion</button></> : <><button className="button button-outline" onClick={() => setAuthOpen(true)}>Connexion</button><button className="button button-primary" onClick={() => setAuthOpen(true)}>Créer un compte <ChevronRight size={17} /></button></>}
         </nav>
       </header>
 
@@ -60,7 +80,7 @@ export default function App() {
             <h1>Ton cours devient plus facile à <span>comprendre, mémoriser et maîtriser.</span></h1>
             <p className="hero-description">Importe tes cours et prépare-toi plus efficacement grâce à des outils de révision conçus pour les étudiants francophones.</p>
             <div className="hero-actions">
-              <button className="button button-primary button-large" onClick={() => document.getElementById('importer')?.scrollIntoView({ behavior: 'smooth' })}>Transformer mon premier cours <ChevronRight size={18} /></button>
+              <button className="button button-primary button-large" onClick={() => signedInName ? document.getElementById('importer')?.scrollIntoView({ behavior: 'smooth' }) : setAuthOpen(true)}>{signedInName ? 'Importer mon premier cours' : 'Créer mon espace étudiant'} <ChevronRight size={18} /></button>
               <a className="text-link" href="#fonctionnalites">Découvrir les fonctionnalités</a>
             </div>
             <div className="trust-line"><ShieldCheck size={17} /> Tes cours restent privés lorsque le stockage sécurisé est configuré.</div>
@@ -82,10 +102,25 @@ export default function App() {
 
         <section className="features-section wrap" id="fonctionnalites"><div className="section-heading"><span className="eyebrow">CONÇU POUR TES ÉTUDES</span><h2>Les bons outils pour mieux réviser</h2><p>Le MVP sera construit progressivement, en donnant la priorité aux fonctions vraiment utiles.</p></div><div className="features-grid">{features.map(({ icon: Icon, title, text }) => <article className="feature-card" key={title}><span className="feature-icon"><Icon size={23} /></span><h3>{title}</h3><p>{text}</p><span className="feature-status">Prévu dans le MVP</span></article>)}</div></section>
 
-        <section className="upload-section" id="importer"><div className="wrap upload-layout"><div className="upload-copy"><span className="eyebrow">TON PREMIER COURS</span><h2>Commence par un PDF.</h2><p>Choisis un cours enregistré sur ton appareil. Cette première version vérifie le fichier localement ; l’envoi vers un espace personnel sécurisé sera activé après configuration du backend.</p><ul><li><CheckCircle2 size={18} /> Fichier PDF uniquement</li><li><CheckCircle2 size={18} /> Taille maximale actuelle : 20 Mo</li><li><LockKeyhole size={18} /> Pas d’envoi au serveur à cette étape</li></ul></div><div className="upload-panel"><div className="upload-panel-title"><span className="upload-icon"><UploadCloud size={24} /></span><div><h3>Importer un cours</h3><p>Choisis un fichier PDF depuis ton appareil.</p></div></div><button className="dropzone" onClick={() => fileInput.current?.click()} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); handleFile(e.dataTransfer.files[0]); }}><span className="dropzone-icon"><Plus size={22} /></span><strong>Cliquer pour choisir un fichier</strong><span>ou déposer le PDF ici</span><small>PDF · 20 Mo maximum</small></button><input ref={fileInput} className="visually-hidden" type="file" accept="application/pdf,.pdf" onChange={e => handleFile(e.target.files?.[0])} />{selectedFile && <div className="file-selected"><FileText size={20} /><span><strong>{selectedFile.name}</strong><small>{formatSize(selectedFile.size)} · sélectionné localement</small></span><button aria-label="Retirer le fichier" onClick={() => { setSelectedFile(null); setNotice(''); if (fileInput.current) fileInput.current.value = ''; }}><X size={17} /></button></div>}{notice && <div className="notice" role="status"><CircleHelp size={17} />{notice}</div>}<button className="button button-primary upload-submit" onClick={() => setNotice(selectedFile ? 'Le PDF est sélectionné, mais il n’a pas été envoyé ni analysé. Configure le stockage et le service d’extraction avant de poursuivre.' : 'Sélectionne d’abord un fichier PDF.')}>Continuer <ChevronRight size={17} /></button></div></div></section>
+        <section className="upload-section" id="importer"><div className="wrap upload-layout"><div className="upload-copy"><span className="eyebrow">TON PREMIER COURS</span><h2>Commence par un PDF.</h2><p>Choisis un cours enregistré sur ton appareil. Cette première version vérifie le fichier localement ; l’envoi vers un espace personnel sécurisé sera activé après configuration du backend.</p><ul><li><CheckCircle2 size={18} /> Fichier PDF uniquement</li><li><CheckCircle2 size={18} /> Taille maximale actuelle : 20 Mo</li><li><LockKeyhole size={18} /> Pas d’envoi au serveur à cette étape</li></ul></div><div className="upload-panel"><div className="upload-panel-title"><span className="upload-icon"><UploadCloud size={24} /></span><div><h3>Importer un cours</h3><p>Choisis un fichier PDF depuis ton appareil.</p></div></div><button className="dropzone" onClick={() => fileInput.current?.click()} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); handleFile(e.dataTransfer.files[0]); }}><span className="dropzone-icon"><Plus size={22} /></span><strong>Cliquer pour choisir un fichier</strong><span>ou déposer le PDF ici</span><small>PDF · 20 Mo maximum</small></button><input ref={fileInput} className="visually-hidden" type="file" accept="application/pdf,.pdf" onChange={e => handleFile(e.target.files?.[0])} />{selectedFile && <div className="file-selected"><FileText size={20} /><span><strong>{selectedFile.name}</strong><small>{formatSize(selectedFile.size)} · sélectionné localement</small></span><button aria-label="Retirer le fichier" onClick={() => { setSelectedFile(null); setNotice(''); if (fileInput.current) fileInput.current.value = ''; }}><X size={17} /></button></div>}{notice && <div className="notice" role="status"><CircleHelp size={17} />{notice}</div>}<button className="button button-primary upload-submit" onClick={async () => {
+        if (!selectedFile) { setNotice('Sélectionne d’abord un fichier PDF.'); return; }
+        if (!signedInName) { setNotice('Connecte-toi ou crée un compte pour préparer ton espace de cours.'); setAuthOpen(true); return; }
+        if (!isSupabaseConfigured || !supabase) { setNotice('Ton compte est connecté, mais le stockage sécurisé n’est pas encore configuré. Le PDF n’a pas été envoyé.'); return; }
+        const { data: userData } = await supabase.auth.getUser();
+        const file = fileInput.current?.files?.[0];
+        if (!userData.user || !file) { setNotice('Choisis à nouveau le PDF avant de continuer.'); return; }
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const path = userData.user.id + '/' + crypto.randomUUID() + '-' + safeName;
+        const { error: uploadError } = await supabase.storage.from('course-pdfs').upload(path, file, { contentType: 'application/pdf', upsert: false });
+        if (uploadError) { setNotice('Échec de l’envoi : ' + uploadError.message); return; }
+        const { error: insertError } = await supabase.from('courses').insert({ user_id: userData.user.id, title: file.name.replace(/\.pdf$/i, ''), original_filename: file.name, storage_path: path, file_size_bytes: file.size, status: 'uploaded' });
+        if (insertError) { await supabase.storage.from('course-pdfs').remove([path]); setNotice('Le fichier a été envoyé mais son enregistrement a échoué : ' + insertError.message); return; }
+        setNotice('Cours importé dans ton espace sécurisé. L’extraction du texte et la génération IA restent à configurer.');
+      }}>Continuer <ChevronRight size={17} /></button></div></div></section>
 
         <section className="security-section wrap" id="securite"><span className="security-icon"><ShieldCheck size={25} /></span><div><h2>La confiance avant tout</h2><p>Pas de faux résultats ni de fausses statistiques. L’authentification, le stockage privé et les fonctions IA seront activés avec une configuration serveur sécurisée et des règles d’accès adaptées.</p></div><span className="security-tag">Construction progressive</span></section>
       </main>
+      {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onSignedIn={name => setSignedInName(name)} />}
       <footer className="footer"><div className="wrap footer-inner"><a className="brand footer-brand" href="#accueil"><span className="brand-mark"><BookOpen size={20} /></span><span>Révise<span className="brand-ci">CI</span><small>APPRENDS. RÉVISE. RÉUSSIS.</small></span></a><p>© {new Date().getFullYear()} RéviseCI · Pensé pour les étudiants francophones.</p><a href="#securite">Confidentialité et sécurité</a></div></footer>
     </div>
   );
